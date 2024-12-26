@@ -128,11 +128,15 @@ class IniciarTransmisionDialog(QDialog):
         self.setLayout(layout)
     
     def cargar_categorias(self):
-        categorias = self.mysql_ops.listar_categorias()
-        self.categoria_combo.clear()
-        for categoria in categorias:
-            self.categoria_combo.addItem(categoria['nombre'], categoria['id_categoria'])
-    
+        try:
+            categorias = self.mysql_ops.listar_categorias()
+            self.categoria_combo.clear()
+            for categoria in categorias:
+                if isinstance(categoria, dict) and 'nombre' in categoria and 'id_categoria' in categoria:
+                    self.categoria_combo.addItem(categoria['nombre'], categoria['id_categoria'])
+        except Exception as e:
+            print(f"Error al cargar categorías: {e}")
+
     def iniciar_transmision(self):
         titulo = self.titulo_input.text()
         id_categoria = self.categoria_combo.currentData()
@@ -439,16 +443,20 @@ class KickApp(QMainWindow):
             self.btn_crear_canal.show()
             self.btn_cerrar_sesion.show()
             
-            canal = self.mysql_ops.obtener_canal_por_usuario(self.usuario_actual['id_usuario'])
-            if canal:
-                transmision_activa = self.mysql_ops.obtener_transmision_activa_por_usuario(
-                    self.usuario_actual['id_usuario']
-                )
-                if transmision_activa:
-                    self.transmision_actual = transmision_activa['id_transmision']
-                    self.btn_finalizar_trans.show()
-                    self.btn_iniciar_trans.hide()
-                else:
+            # Obtener todos los canales del usuario
+            canales = self.mysql_ops.obtener_canales_por_usuario(self.usuario_actual['id_usuario'])
+            if canales:
+                # Verificar si hay transmisiones activas en cualquiera de los canales
+                for canal in canales:
+                    transmision_activa = self.mysql_ops.obtener_transmision_activa_por_usuario(
+                        self.usuario_actual['id_usuario']
+                    )
+                    if transmision_activa:
+                        self.transmision_actual = transmision_activa['id_transmision']
+                        self.btn_finalizar_trans.show()
+                        self.btn_iniciar_trans.hide()
+                        break
+                else:  # Si no hay transmisiones activas
                     self.btn_iniciar_trans.show()
                     
             self.actualizar_listas()
@@ -466,14 +474,47 @@ class KickApp(QMainWindow):
 
     def mostrar_iniciar_transmision(self):
         if self.usuario_actual:
-            canal = self.mysql_ops.obtener_canal_por_usuario(self.usuario_actual['id_usuario'])
-            if canal:
-                dialog = IniciarTransmisionDialog(self.mysql_ops, canal['id_canal'], self)
-                if dialog.exec() == QDialog.DialogCode.Accepted:
-                    self.transmision_actual = dialog.id_transmision
-                    self.btn_finalizar_trans.show()
-                    self.btn_iniciar_trans.hide()
-                    self.actualizar_listas()
+            # Obtener todos los canales del usuario
+            canales = self.mysql_ops.obtener_canales_por_usuario(self.usuario_actual['id_usuario'])
+            if not canales:
+                QMessageBox.warning(self, "Error", "Necesitas crear un canal primero")
+                return
+                
+            if len(canales) == 1:
+                # Si solo tiene un canal, usar ese
+                canal = canales[0]
+            else:
+                # Si tiene múltiples canales, mostrar diálogo de selección
+                dialogo = QDialog(self)
+                dialogo.setWindowTitle("Seleccionar Canal")
+                layout = QVBoxLayout()
+                
+                combo = QComboBox()
+                for canal in canales:
+                    combo.addItem(canal['nombre_canal'], canal['id_canal'])
+                
+                layout.addWidget(QLabel("Seleccione el canal para transmitir:"))
+                layout.addWidget(combo)
+                
+                btn_ok = QPushButton("Seleccionar")
+                btn_ok.clicked.connect(dialogo.accept)
+                layout.addWidget(btn_ok)
+                
+                dialogo.setLayout(layout)
+                
+                if dialogo.exec() == QDialog.DialogCode.Accepted:
+                    canal_id = combo.currentData()
+                    canal = next(c for c in canales if c['id_canal'] == canal_id)
+                else:
+                    return
+    
+            # Iniciar transmisión con el canal seleccionado
+            dialog = IniciarTransmisionDialog(self.mysql_ops, canal['id_canal'], self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self.transmision_actual = dialog.id_transmision
+                self.btn_finalizar_trans.show()
+                self.btn_iniciar_trans.hide()
+                self.actualizar_listas()
 
     def finalizar_transmision(self):
         if self.transmision_actual:
@@ -634,13 +675,15 @@ class KickApp(QMainWindow):
         self.lista_transmisiones.clear()
         try:
             transmisiones = self.mysql_ops.obtener_transmisiones_activas()
-            for trans in transmisiones:
-                self.lista_transmisiones.addItem(
-                    f"{trans['nombre_canal']} - {trans['titulo']}"
-                )
+            if transmisiones:
+                for trans in transmisiones:
+                    if isinstance(trans, dict) and 'nombre_canal' in trans and 'titulo' in trans:
+                        self.lista_transmisiones.addItem(
+                            f"{trans['nombre_canal']} - {trans['titulo']}"
+                        )
         except Exception as e:
             QMessageBox.warning(self, "Error", f"Error al cargar transmisiones: {str(e)}")
-
+    
     def actualizar_lista_canales(self):
             self.lista_canales.clear()
             try:
@@ -653,34 +696,43 @@ class KickApp(QMainWindow):
                 QMessageBox.warning(self, "Error", f"Error al cargar canales: {str(e)}")
     
     def mostrar_categorias(self):
-        try:
-            categorias = self.mysql_ops.listar_categorias()
-            self.lista_transmisiones.clear()
-            self.lista_canales.clear()
-            
-            if not categorias:
-                # Insertar algunas categorías por defecto si no existen
-                categorias_default = [
-                    "Videojuegos", "Just Chatting", "IRL", "Música", 
-                    "Deportes", "Eventos", "Arte", "Educación"
-                ]
-                for cat in categorias_default:
-                    self.mysql_ops.crear_categoria(cat)
-                categorias = self.mysql_ops.listar_categorias()
-            
-            # Mostrar transmisiones por categoría
-            for categoria in categorias:
-                self.lista_transmisiones.addItem(f"=== {categoria['nombre']} ===")
-                transmisiones = self.mysql_ops.obtener_transmisiones_por_categoria(
-                    categoria['id_categoria']
-                )
-                for trans in transmisiones:
-                    self.lista_transmisiones.addItem(
-                        f"  {trans['nombre_canal']} - {trans['titulo']}"
-                    )
-                
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Error al cargar categorías: {str(e)}")
+       try:
+           categorias = self.mysql_ops.listar_categorias()
+           self.lista_transmisiones.clear()
+           self.lista_canales.clear()
+           
+           if not categorias:
+               # Insertar algunas categorías por defecto si no existen
+               categorias_default = [
+                   "Videojuegos", "Just Chatting", "IRL", "Música", 
+                   "Deportes", "Eventos", "Arte", "Educación"
+               ]
+               for cat in categorias_default:
+                   self.mysql_ops.crear_categoria(cat)
+               categorias = self.mysql_ops.listar_categorias()
+           
+           # Mostrar transmisiones por categoría
+           for categoria in categorias:
+               if isinstance(categoria, dict) and 'nombre' in categoria and 'id_categoria' in categoria:
+                   self.lista_transmisiones.addItem(f"=== {categoria['nombre']} ===")
+                   transmisiones = self.mysql_ops.obtener_transmisiones_por_categoria(
+                       categoria['id_categoria']
+                   )
+                   if transmisiones:
+                       for trans in transmisiones:
+                           if isinstance(trans, dict) and 'nombre_canal' in trans and 'titulo' in trans:
+                               self.lista_transmisiones.addItem(
+                                   f"  {trans['nombre_canal']} - {trans['titulo']}"
+                               )
+                   else:
+                       self.lista_transmisiones.addItem("  No hay transmisiones activas en esta categoría")
+           
+           # Si no hay categorías o transmisiones en ninguna categoría
+           if self.lista_transmisiones.count() == len(categorias):
+               self.lista_transmisiones.addItem("No hay transmisiones activas en ninguna categoría")
+                   
+       except Exception as e:
+           QMessageBox.warning(self, "Error", f"Error al cargar categorías: {str(e)}")
     
     def closeEvent(self, event):
         try:
