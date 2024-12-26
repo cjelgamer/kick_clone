@@ -1,0 +1,125 @@
+
+
+// Crear colección de mensajes de chat
+db.createCollection("mensajes_chat", {
+    validator: {
+        $jsonSchema: {
+            bsonType: "object",
+            required: ["id_canal", "id_usuario", "contenido", "timestamp"],
+            properties: {
+                id_canal: {
+                    bsonType: "string",
+                    description: "ID del canal de MySQL - obligatorio"
+                },
+                id_usuario: {
+                    bsonType: "string",
+                    description: "ID del usuario de MySQL - obligatorio"
+                },
+                contenido: {
+                    bsonType: "string",
+                    description: "Contenido del mensaje - obligatorio"
+                },
+                timestamp: {
+                    bsonType: "date",
+                    description: "Fecha y hora del mensaje - obligatorio"
+                },
+                tipo: {
+                    bsonType: "string",
+                    enum: ["mensaje", "emote", "suscripcion", "donacion", "raid", "clip"],
+                    description: "Tipo de mensaje"
+                },
+                metadata: {
+                    bsonType: "object",
+                    properties: {
+                        id_emote: { bsonType: "string" },
+                        cantidad_donacion: { bsonType: "double" },
+                        nivel_suscripcion: { bsonType: "int" },
+                        clip: {
+                            bsonType: "object",
+                            properties: {
+                                titulo: { bsonType: "string" },
+                                url: { bsonType: "string" }
+                            }
+                        },
+                        raid: {
+                            bsonType: "object",
+                            properties: {
+                                espectadores: { bsonType: "int" }
+                            }
+                        }
+                    }
+                },
+                moderado: { bsonType: "bool" },
+                destacado: { bsonType: "bool" },
+                respuesta_a: { bsonType: "string" }
+            }
+        }
+    }
+});
+
+// Crear colección de estados de transmisión
+db.createCollection("estados_transmision", {
+    validator: {
+        $jsonSchema: {
+            bsonType: "object",
+            required: ["id_transmision", "timestamp", "contador_espectadores"],
+            properties: {
+                id_transmision: {
+                    bsonType: "string",
+                    description: "ID de la transmisión de MySQL - obligatorio"
+                },
+                timestamp: {
+                    bsonType: "date",
+                    description: "Fecha y hora del estado - obligatorio"
+                },
+                contador_espectadores: {
+                    bsonType: "int",
+                    description: "Número de espectadores actuales - obligatorio"
+                },
+                calidad_stream: {
+                    bsonType: "object",
+                    properties: {
+                        resolucion: { bsonType: "string" },
+                        bitrate: { bsonType: "int" },
+                        fps: { bsonType: "int" }
+                    }
+                },
+                estadisticas_servidor: {
+                    bsonType: "object",
+                    properties: {
+                        uso_cpu: { bsonType: "double" },
+                        uso_memoria: { bsonType: "double" },
+                        ancho_banda: { bsonType: "double" }
+                    }
+                }
+            }
+        }
+    }
+});
+
+// Crear colección de clips
+db.createCollection("clips", {
+    validator: {
+        $jsonSchema: {
+            bsonType: "object",
+            required: ["id_transmision", "id_usuario", "titulo", "timestamp"],
+            properties: {
+                id_transmision: { bsonType: "string" },
+                id_usuario: { bsonType: "string" },
+                titulo: { bsonType: "string" },
+                timestamp: { bsonType: "date" },
+                duracion: { bsonType: "int" },
+                views: { bsonType: "int" },
+                url: { bsonType: "string" }
+            }
+        }
+    }
+});
+
+// Crear índices para mejorar el rendimiento
+db.mensajes_chat.createIndex({ "id_canal": 1, "timestamp": -1 });
+db.mensajes_chat.createIndex({ "id_usuario": 1 });
+db.estados_transmision.createIndex({ "id_transmision": 1, "timestamp": -1 });
+db.clips.createIndex({ "id_transmision": 1 });
+db.clips.createIndex({ "id_usuario": 1 });
+db.clips.createIndex({ "views": -1 }); // Para listados de clips populares

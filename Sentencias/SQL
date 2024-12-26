@@ -1,0 +1,109 @@
+-- Active: 1726805132421@@127.0.0.1@3306@kick_db
+CREATE DATABASE kick_db;
+USE kick_db;
+
+-- Tabla de usuarios
+CREATE TABLE usuarios (
+    id_usuario VARCHAR(36) PRIMARY KEY,
+    nombre_usuario VARCHAR(50) UNIQUE NOT NULL,
+    correo VARCHAR(100) UNIQUE NOT NULL,
+    contrasena_hash VARCHAR(255) NOT NULL,
+    biografia TEXT,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    es_streamer BOOLEAN DEFAULT FALSE,
+    dos_factores_activo BOOLEAN DEFAULT FALSE,
+    verificado BOOLEAN DEFAULT FALSE,
+    imagen_perfil VARCHAR(255),
+    banner_perfil VARCHAR(255),
+    pais VARCHAR(100)
+);
+
+-- Tabla de redes sociales
+CREATE TABLE redes_sociales (
+    id_perfil VARCHAR(36) PRIMARY KEY,
+    id_usuario VARCHAR(36),
+    plataforma VARCHAR(20),
+    nombre_usuario VARCHAR(50),
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+);
+
+-- Tabla de categorías
+CREATE TABLE categorias (
+    id_categoria VARCHAR(36) PRIMARY KEY,
+    nombre VARCHAR(100),
+    imagen VARCHAR(255)
+);
+
+-- Tabla de canales
+CREATE TABLE canales (
+    id_canal VARCHAR(36) PRIMARY KEY,
+    id_usuario VARCHAR(36),
+    nombre_canal VARCHAR(50) UNIQUE NOT NULL,
+    descripcion TEXT,
+    clave_stream VARCHAR(100),
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    banner_canal VARCHAR(255),
+    reglas TEXT,
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
+);
+
+-- Tabla de transmisiones
+CREATE TABLE transmisiones (
+    id_transmision VARCHAR(36) PRIMARY KEY,
+    id_canal VARCHAR(36),
+    id_categoria VARCHAR(36),
+    titulo VARCHAR(100),
+    inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fin TIMESTAMP NULL,    -- Agregamos NULL para permitir valores nulos
+    estado ENUM('en_vivo', 'finalizado'),
+    pico_espectadores INT DEFAULT 0,
+    tags JSON,
+    edad_minima INT DEFAULT 0,
+    solo_suscriptores BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (id_canal) REFERENCES canales(id_canal),
+    FOREIGN KEY (id_categoria) REFERENCES categorias(id_categoria)
+);
+
+-- Tabla de suscripciones (corregida)
+CREATE TABLE suscripciones (
+    id_suscripcion VARCHAR(36) PRIMARY KEY,
+    id_usuario VARCHAR(36),
+    id_canal VARCHAR(36),
+    nivel_suscripcion INT,
+    fecha_inicio TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_fin TIMESTAMP NULL,    -- Agregamos NULL para permitir valores nulos
+    estado ENUM('activa', 'cancelada', 'expirada'),
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario),
+    FOREIGN KEY (id_canal) REFERENCES canales(id_canal)
+);
+-- Tabla de roles
+CREATE TABLE roles (
+    id_rol VARCHAR(36) PRIMARY KEY,
+    id_canal VARCHAR(36),
+    nombre VARCHAR(50),
+    permisos JSON,
+    FOREIGN KEY (id_canal) REFERENCES canales(id_canal)
+);
+
+-- Tabla de asignación de roles
+CREATE TABLE roles_usuarios (
+    id_usuario VARCHAR(36),
+    id_rol VARCHAR(36),
+    id_canal VARCHAR(36),
+    fecha_asignacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id_usuario, id_rol, id_canal),
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario),
+    FOREIGN KEY (id_rol) REFERENCES roles(id_rol),
+    FOREIGN KEY (id_canal) REFERENCES canales(id_canal)
+);
+
+-- Tabla de seguidores
+CREATE TABLE seguidores (
+    id_usuario VARCHAR(36),
+    id_canal VARCHAR(36),
+    fecha_seguimiento TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notificaciones_activas BOOLEAN DEFAULT TRUE,
+    PRIMARY KEY (id_usuario, id_canal),
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario),
+    FOREIGN KEY (id_canal) REFERENCES canales(id_canal)
+);
